@@ -40,11 +40,17 @@ int get_listener_socket(const char *port){
             close(sockfd);
             continue;
         }
-        
+
         break;
     }
-
-
+    
     freeaddrinfo(servinfo);
+
+    if (listen(sockfd, BACKLOG) == -1){
+        perror("Error en listen");
+        close(sockfd);
+        return -1;
+    }
+    
     return sockfd;
 }
