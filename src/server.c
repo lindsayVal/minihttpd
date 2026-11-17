@@ -24,7 +24,7 @@ int get_listener_socket(const char *port){
     }
 
     for(ptr = servinfo; ptr!= NULL; ptr = ptr -> ai_next){
-        if((sockfd = socket(ptr ->ai_family, ptr->ai_socktype, ptr->ai_protocol)) == -1){
+        if((sockfd = socket(ptr ->ai_family, ptr->ai_socktype | SOCK_NONBLOCK, ptr->ai_protocol)) == -1){
             perror("Error al obtener sockfd");
             continue;
         }
@@ -51,6 +51,7 @@ int get_listener_socket(const char *port){
         close(sockfd);
         return -1;
     }
-    
+
     return sockfd;
 }
+
