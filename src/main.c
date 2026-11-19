@@ -9,6 +9,7 @@
 #include <fcntl.h>
 
 #include "server.h"
+#include "http.h"
 #define MAX_EVENTS 20
 
 void liberar_conexion(int epfd, struct connection *cnct){
@@ -118,6 +119,12 @@ int main(void) {
                     if(strstr(cnct->buffer, "\r\n\r\n") != NULL){
                         printf("Solicitud completada\n");
                     
+                    struct http_request req;
+                    if(parse_request(cnct->buffer, &req)==0){
+                        printf("Metodo: %s | Ruta: %s | Keep-Alive: %d\n", req.method, req.path, req.keep_alive);
+                    }else{
+                        printf("Error en solicitud\n");
+                    }
                     const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hola</h1>";
                     write(cnct->fd, response, strlen(response));
 
