@@ -3,9 +3,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/epoll.h>
+#include <errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
 
 #include "server.h"
 #define MAX_EVENTS 20
+
+void liberar_conexion(int epfd, struct connection *cnct){
+    if(cnct == NULL) return;
+    epoll_ctl(epfd, EPOLL_CTL_DEL, cnct->fd, NULL);
+    close(cnct->fd);
+    free(cnct);
+}
 
 int main(void) {
     int fd, epfd, ready, i;
@@ -14,7 +25,7 @@ int main(void) {
 
     fd = get_listener_socket("8000");
     if(fd == -1){
-        fprintf(stderr, "Errror con get_listener_socket");
+        fprintf(stderr, "Error con get_listener_socket\n");
         exit(EXIT_FAILURE);
     }
 
@@ -35,7 +46,6 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
-    
     printf("Socket escuchando en puerto 8000\n");
     
     while (1) {
@@ -56,37 +66,64 @@ int main(void) {
                     continue;
                 }
 
+                int flags = fcntl(client_fd, F_GETFL, 0);
+                if(flags == -1||fcntl(client_fd,F_SETFL, flags | O_NONBLOCK) == -1){
+                    perror("Error al configurar O_NONBLOCK con fcntl");
+                    close(client_fd);
+                    continue;
+                }
+
+                struct connection *cnct = malloc(sizeof(struct connection));
+                if(!cnct){
+                    perror("Error al asignar memoria para la conexión");
+                    close(client_fd);
+                    continue;
+                }
+
+                cnct->fd = client_fd;
+                cnct->bytes_read = 0;
+                memset(cnct->buffer, 0, BUFFER_SIZE);
+
                 ev.events = EPOLLIN;
-                ev.data.fd = client_fd;
+                ev.data.ptr = cnct;
 
                 if(epoll_ctl(epfd, EPOLL_CTL_ADD, client_fd, &ev) == -1){
                     perror("Error al agregar client_fd a epoll");
+                    free(cnct);
                     close(client_fd);
                 }else{
                     printf("Conexión aceptada\n");
                 }
             }
 
-            else{
-                int client_fd = evlist[i].data.fd;
-                char buffer[1024];
-                memset(buffer, 0, sizeof(buffer));
+            else{ 
 
-                ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer)-1);
+                struct connection *cnct = (struct connection*)evlist[i].data.ptr;
 
-                if(bytes_read<=0){
+                ssize_t bytes = read(cnct->fd, cnct->buffer + cnct->bytes_read, BUFFER_SIZE-cnct->bytes_read-1);
+
+                if(bytes < 0){
+                    if(errno == EAGAIN || errno == EWOULDBLOCK){
+                        continue;
+                    }
+                    perror("Error en read");
+                    liberar_conexion(epfd, cnct);
+                }else if(bytes == 0){
                     printf("Cliente desconectado\n");
-                    close(client_fd);
+                    liberar_conexion(epfd, cnct);
                 }else{
-                    buffer[bytes_read] = '\0';
-                    printf("Solicitud recibida\n");
+                    cnct->bytes_read += bytes;
+                    cnct->buffer[cnct->bytes_read] = '\0';
 
+                    if(strstr(cnct->buffer, "\r\n\r\n") != NULL){
+                        printf("Solicitud completada\n");
+                    
+                    const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hola</h1>";
+                    write(cnct->fd, response, strlen(response));
 
-
-                    const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hola desde MiniHTTPd</h1";
-                    write(client_fd, response, strlen(response));
-
-                    close(client_fd);
+                    cnct->bytes_read = 0;
+                    memset(cnct->buffer,0,BUFFER_SIZE);
+                    }
                 }
             }
         }
