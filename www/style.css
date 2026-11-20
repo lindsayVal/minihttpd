@@ -1,0 +1,21 @@
+body {
+    display: grid;
+    margin: 2rem;
+    place-items: center;
+    color: #030b11;
+    background: #d0e2f3;
+    font-family: system-ui, sans-serif;
+
+}
+
+main {
+    text-align: center;
+    max-width: 44rem;
+    margin: 0 auto;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
