@@ -7,7 +7,15 @@ const char *mime_type(const char *path){
     }
 
     const char *name = strrchr(path, '/');
-    const char *extension = strrchr(name != NULL ? name + 1: path, '.');
+    const char *extension; 
+
+    if(name == NULL){
+        name = path;
+    }else{
+        name = name + 1;
+    }
+
+    extension = strrchr(name, '.');
 
     if(extension == NULL || *(extension + 1) == '\0'){
         return "application/octet-stream";
@@ -33,6 +41,6 @@ const char *mime_type(const char *path){
         return "image/jpeg";
     }
 
-    return "aplication/octet-stream";
+    return "application/octet-stream";
 
 }

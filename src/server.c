@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -10,7 +11,7 @@
 int get_listener_socket(const char *port){
     int status;
     struct addrinfo hints, *servinfo, *ptr;
-    int sockfd;
+    int sockfd = -1;
     int yes = 1;
 
     memset(&hints, 0, sizeof hints);
@@ -45,6 +46,11 @@ int get_listener_socket(const char *port){
     }
     
     freeaddrinfo(servinfo);
+
+    if(sockfd == -1){
+        fprintf(stderr, "No se pudo enlazar ningun socket al puerto /n");
+        return -1;
+    }
 
     if (listen(sockfd, BACKLOG) == -1){
         perror("Error en listen");
