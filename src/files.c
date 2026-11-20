@@ -37,7 +37,7 @@ static int abrir_path_rel(int root_fd, char *relative){
     return -1;
 }
 
-int abrir_root_publica(struct document_root *root, char *path){
+int abrir_root_publica(struct document_root *root, const char *path){
     if(realpath(path, root->path)==NULL){
         return -1;
     }
@@ -49,11 +49,11 @@ int abrir_root_publica(struct document_root *root, char *path){
     return 0;
 }
 
-int abrir_archivo(struct document_root *root, char *path, int *fd, off_t *size, const char **type){
+int abrir_archivo(struct document_root *root, const char *path, int *fd, off_t *size, const char **type){
     char candidate[PATH_MAX];
     char resolved[PATH_MAX];
     char *relative;
-    char *resource = path;
+    const char *resource = path;
     struct stat info;
     size_t path_length;
     size_t root_length;
@@ -61,11 +61,11 @@ int abrir_archivo(struct document_root *root, char *path, int *fd, off_t *size, 
     int file_fd = -1;
 
     path_length = strcspn(path, "?");
-    if(path[0] != '/'||path_length>=sizeof(candidate)|| memchr(path, '\\', path_lenght)!= NULL){
+    if(path[0] != '/'||path_length>=sizeof(candidate)|| memchr(path, '\\', path_length)!= NULL){
         return 400;
     }
 
-    if(memmem(path, path_length, "/../", 4)!= NULL||(path_lenght>=3&&memcmp(path+path_length-3, "/..", 3)==0)){
+    if(memmem(path, path_length, "/../", 4)!= NULL||(path_length>=3&&memcmp(path+path_length-3, "/..", 3)==0)){
         return 403;
     }
     if(path_length == 1){

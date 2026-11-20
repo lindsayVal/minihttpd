@@ -11,6 +11,8 @@
 
 #include "server.h"
 #include "http.h"
+#include "files.h"
+
 #define MAX_EVENTS 20
 
 static void liberar_conexion(struct connection *cnct){
@@ -57,7 +59,7 @@ static void acept_connections(int epfd, int fd){
     }
 }
 
-static int preparar_resp(struct connection *cnct){
+static int preparar_resp(struct connection *cnct, struct document_root *root){
     struct http_request req;
     struct http_response *res = &cnct->response;
     char *end;
@@ -84,8 +86,7 @@ static int preparar_resp(struct connection *cnct){
 
         if(status == 200){
             res->keep_alive = req.keep_alive;
-            res->file_fd = -1;
-            res->file_size = 0;
+            status = abrir_archivo(root, req.path, &res->file_fd, &res->file_size, &type);
         }
     }
 
@@ -136,7 +137,7 @@ static int enviar_resp(struct connection *cnct){
     return 1;
 }
 
-static int atender_connection(int epfd, struct connection *cnct){
+static int atender_connection(int epfd, struct connection *cnct, struct document_root *root){
     struct http_response *res = &cnct->response;
     int status;
     ssize_t bytes;
@@ -156,7 +157,7 @@ static int atender_connection(int epfd, struct connection *cnct){
             memset(res, 0, sizeof(*res));
             res->file_fd=-1;
         }
-        status = preparar_resp(cnct);
+        status = preparar_resp(cnct, root);
         if(status == -1){
             return -1;
         }
@@ -170,7 +171,8 @@ static int atender_connection(int epfd, struct connection *cnct){
             continue;
         }else if(bytes<0 && (errno == EAGAIN || errno == EWOULDBLOCK)){
             return registrar_events(epfd, EPOLL_CTL_MOD, cnct->fd, cnct, EPOLLIN);
-        }else{ return -1;}
+        }else{ 
+            return -1;}
     }
 }
 
@@ -180,15 +182,22 @@ int main(void) {
     int result = EXIT_SUCCESS;
     struct epoll_event evlist[MAX_EVENTS];
     struct connection *cnct;
+    struct document_root root;
 
     if(signal(SIGPIPE, SIG_IGN)==SIG_ERR){
         perror("Error al configurar SIGPIPE");
         return EXIT_FAILURE;
     }
 
+    if(abrir_root_publica(&root, "www") == -1){
+        perror("Error al abrir www");
+        return EXIT_FAILURE;
+    }
+
     fd = get_listener_socket(PORT);
     if(fd == -1){
         fprintf(stderr, "Error con get_listener_socket\n");
+        close(root.fd);
         return EXIT_FAILURE;
     }
 
@@ -196,6 +205,7 @@ int main(void) {
     if (epfd == -1){
         perror("Error en epoll_create1");
         close(fd);
+        close(root.fd);
         return EXIT_FAILURE;
     }
 
@@ -203,6 +213,7 @@ int main(void) {
         perror("Error al agregar el socket de escucha a epoll");
         close(fd);
         close(epfd);
+        close(root.fd);
         return EXIT_FAILURE;
     }
 
@@ -223,7 +234,7 @@ int main(void) {
             cnct = evlist[i].data.ptr;
             if(cnct == NULL){
                 acept_connections(epfd, fd);
-            }else if((evlist[i].events & EPOLLERR) != 0 || atender_connection(epfd, cnct) == -1){
+            }else if((evlist[i].events & EPOLLERR) != 0 || atender_connection(epfd, cnct, &root) == -1){
                 liberar_conexion(cnct);    
             }
         }
@@ -231,6 +242,7 @@ int main(void) {
 
     close(fd);
     close(epfd);
+    close(root.fd);
     return result;
 
 }
